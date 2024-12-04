@@ -1,0 +1,23 @@
+name: crism_toolkit
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - numpy
+  - geopandas
+  - rasterio
+  - scikit-learn
+  - scikit-image
+  - bokeh
+  - shapely
+  - scipy
+  - jupyterlab
+  - opencv
+  - ipywidgets
+  - pytables
+  - pip
+  - spectral
+  - selenium
+  - pip:
+    - psutil
