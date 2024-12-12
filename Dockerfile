@@ -41,4 +41,6 @@ COPY ./app /app
 EXPOSE 5006
 WORKDIR /app
 # Define the command to run your Bokeh application
+#CMD ["bokeh", "serve", "crism_toolkit.py", "--allow-websocket-origin=*", "--port=5006"]
 CMD ["bokeh", "serve", "crism_toolkit.py", "--allow-websocket-origin=*", "--port=5006"]
+

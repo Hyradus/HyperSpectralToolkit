@@ -18,7 +18,7 @@ from selenium import webdriver
 from bokeh.io.export import export_svgs
 from sklearn.preprocessing import MinMaxScaler
 
-global hdr_files, if_files, sr_files, lbl_data, img, img_sr, reference_RGB, nan_img_sr_ma, lbl_data, wavelength, reference_RGB2, nan_img_sr_ma2, reference_RGB, nan_img_sr_ma
+#global lbl_data, img, img_sr, reference_RGB, nan_img_sr_ma, lbl_data, wavelength, reference_RGB, nan_img_sr_ma, plot_height, plot_width
 
 def download_and_extract_specific_folder(url, save_path, extract_dir, target_folder):
     try:
@@ -236,7 +236,7 @@ def parse_lbl(lbl_file):
 # Function to load the hdr file, its corresponding 'sr' file, and the lbl file
 
 def load_files(if_file):
-    
+    #global img, img_sr, wavelength, sr_names, lbl_data, hdr_folder_path
     # Define paths for the selected I/F file, SR file, and LBL file
     selected_subfolder = subfolder_dropdown.value
     hdr_folder_path = os.path.join(root_folder, selected_subfolder)
@@ -251,7 +251,8 @@ def load_files(if_file):
     # Load the files using spectral
     img = open_image(hdr_file)
     img_sr = open_image(sr_file)
-    
+    #img_height, img_width, _ = img.shape#[:2]
+    print(img.shape)
     # Parse the lbl file to get lat/lon information
     lbl_data = parse_lbl(lbl_file)
     
@@ -259,7 +260,7 @@ def load_files(if_file):
     wavelength = np.array(img.metadata['wavelength']).astype(float)/1000
     sr_names = img_sr.metadata['band names']
 
-    return img, img_sr, wavelength, sr_names, lbl_data, hdr_folder_path
+    return img, img_sr, wavelength, sr_names, lbl_data, hdr_folder_path#, img_height, img_width
 
 
 # Function to process and mask the images
@@ -292,50 +293,82 @@ def process_image(img, img_sr, channels_names):
 
     return RGB_browse, nan_img_sr_ma
 
-def plotter(lbl_data,height, width):
+def plotter(lbl_data, img):
+    #global p, p_vis, plot_height, plot_width
+    #global plot_height, plot_width,p, p_vis
+    #img_height, img_width = img.shape[:2]
+    # Calculate aspect ratio based on coordinates
+    latitude_range = lbl_data['max_lat'] - lbl_data['min_lat']
+    longitude_range = lbl_data['east_lon'] - lbl_data['west_lon']
+    aspect_ratio = latitude_range / longitude_range
+    print(aspect_ratio)
+    # Adjust image dimensions to match the aspect ratio    
     
-    plot_width = 1600
-    plot_height = 720
-
-
-
+    #if img_width > img_height:
+    #    img_width = img_width //2    
+    #    img_height = int(img_width / aspect_ratio)
+    #else:
+        #img_width = img_width //2
+        #img_height = int(img_height / aspect_ratio)
+        
+    plot_height, plot_width = img.shape[:2]
     x_range = Range1d(start=lbl_data['west_lon'], end=lbl_data['east_lon'])
     y_range = Range1d(start=lbl_data['min_lat'], end=lbl_data['max_lat'])
 
     p = figure(x_range=x_range,
-            y_range=y_range,
-            match_aspect=True,
-            x_axis_label="Longitude (degrees)",
-            y_axis_label="Latitude (degrees)",
-            tools=['wheel_zoom,pan,box_zoom,reset', cht],
-            width=plot_width // 4, height=plot_height)
+               y_range=y_range,
+               match_aspect=True,
+               x_axis_label="Longitude (degrees)",
+               y_axis_label="Latitude (degrees)",
+               tools=['wheel_zoom,pan,box_zoom,reset'],
+               width=plot_width, height=plot_height)
 
     p_vis = figure(x_range=p.x_range,  # Share x_range with p
-                y_range=p.y_range,  # Share y_range with p
-                match_aspect=True,
-                x_axis_label="Longitude (degrees)",
-                y_axis_label="Latitude (degrees)",
-                tools=['wheel_zoom,pan,box_zoom,reset', cht],
-                width=plot_width // 4, height=plot_height)
+                   y_range=p.y_range,  # Share y_range with p
+                   match_aspect=True,
+                   x_axis_label="Longitude (degrees)",
+                   y_axis_label="Latitude (degrees)",
+                   tools=['wheel_zoom,pan,box_zoom,reset'],
+                   width=plot_width, height=plot_height)
+
     # Add the RGBA image to the plot
-    #p.image_rgba(image=[image_rgba], x=lbl_data['west_lon'], y=lbl_data['min_lat'],
-    #             dw=lbl_data['east_lon'] - lbl_data['west_lon'], dh=lbl_data['max_lat'] - lbl_data['min_lat'])
     p.image_rgba(image='image_rgba', source=source_image_rgba, x='x', y='y', dw='dw', dh='dh')
-
-    # Add grid lines at major ticks
-    #p.xgrid.grid_line_color = "gray"
-    #p.xgrid.grid_line_width = 1
-    #p.ygrid.grid_line_color = "gray"
-    #p.ygrid.grid_line_width = 1
-    
-
-    
-    # Add the RGBA image to the plot
-    #p.image_rgba(image=[image_rgba], x=lbl_data['west_lon'], y=lbl_data['min_lat'],
-    #             dw=lbl_data['east_lon'] - lbl_data['west_lon'], dh=lbl_data['max_lat'] - lbl_data['min_lat'])
     p_vis.image_rgba(image='image_rgba', source=source_image_rgba2, x='x', y='y', dw='dw', dh='dh')
 
-    return p, p_vis
+    
+    # Update the ranges directly in p and p_vis
+    p.x_range.start = lbl_data['west_lon']
+    p.x_range.end = lbl_data['east_lon']
+    p.y_range.start = lbl_data['min_lat']
+    p.y_range.end = lbl_data['max_lat']
+
+    # Define the new ticks based on the lon/lat in lbl_data
+    longitude_ticks = list(np.arange(round(lbl_data['west_lon'], 1), round(lbl_data['east_lon'], 1), 0.05))
+    latitude_ticks = list(np.arange(round(lbl_data['min_lat'], 1), round(lbl_data['max_lat'], 1), 0.05))
+
+    # Update the tickers
+    p.xaxis.ticker = FixedTicker(ticks=longitude_ticks)
+    p.yaxis.ticker = FixedTicker(ticks=latitude_ticks)
+
+    # Ensure grid lines are rendered on top using Span
+    # Remove any existing Span objects (grid lines) if necessary
+    p.renderers = [r for r in p.renderers if not isinstance(r, Span)]
+    p_vis.renderers = [r for r in p_vis.renderers if not isinstance(r, Span)]
+
+    # Add vertical (longitude) grid lines as Span objects
+    for x in longitude_ticks:
+        vline = Span(location=x, dimension='height', line_color='gray', line_dash='dashed', line_width=1, line_alpha=0.9)
+        p.add_layout(vline)
+        p_vis.add_layout(vline)
+
+    # Add horizontal (latitude) grid lines as Span objects
+    for y in latitude_ticks:
+        hline = Span(location=y, dimension='width', line_color='gray', line_dash='dashed', line_width=1, line_alpha=0.9)
+        p.add_layout(hline)
+        p_vis.add_layout(hline)
+    return p, p_vis, plot_height, plot_width
+
+
 
 # Initialize variables
 img, img_sr, wavelength, sr_names, lbl_data, hdr_folder_path = load_files(if_files[0])
@@ -384,45 +417,18 @@ source_image_rgba2 = ColumnDataSource(data={
 
 
 # Get the height and width of the image
-height, width = image_rgba.shape[:2]
-plot_width = 1600
-plot_height = 720
+#img_height, img_width = img.shape[:2]
 
-p, p_vis = plotter(lbl_data,height,width)
+
+#plot_width = 1600
+#plot_height = 720
+
+p, p_vis, plot_height, plot_width = plotter(lbl_data,img)#img_height, img_width)
 print(lbl_data)
 #tickergridder([p, p_vis], lbl_data)
-# Update the ranges directly in p and p_vis
-p.x_range.start = lbl_data['west_lon']
-p.x_range.end = lbl_data['east_lon']
-p.y_range.start = lbl_data['min_lat']
-p.y_range.end = lbl_data['max_lat']
 
-# Define the new ticks based on the lon/lat in lbl_data
-longitude_ticks = list(np.arange(round(lbl_data['west_lon'], 1), round(lbl_data['east_lon'], 1), 0.05))
-latitude_ticks = list(np.arange(round(lbl_data['min_lat'], 1), round(lbl_data['max_lat'], 1), 0.05))
-
-# Update the tickers
-p.xaxis.ticker = FixedTicker(ticks=longitude_ticks)
-p.yaxis.ticker = FixedTicker(ticks=latitude_ticks)
-
-# Ensure grid lines are rendered on top using Span
-# Remove any existing Span objects (grid lines) if necessary
-p.renderers = [r for r in p.renderers if not isinstance(r, Span)]
-p_vis.renderers = [r for r in p_vis.renderers if not isinstance(r, Span)]
-
-# Add vertical (longitude) grid lines as Span objects
-for x in longitude_ticks:
-    vline = Span(location=x, dimension='height', line_color='gray', line_dash='dashed', line_width=1, line_alpha=0.9)
-    p.add_layout(vline)
-    p_vis.add_layout(vline)
-
-# Add horizontal (latitude) grid lines as Span objects
-for y in latitude_ticks:
-    hline = Span(location=y, dimension='width', line_color='gray', line_dash='dashed', line_width=1, line_alpha=0.9)
-    p.add_layout(hline)
-    p_vis.add_layout(hline)
 # Band profile plot
-p_band_profile = figure(width=plot_width//2, height=plot_height//2, title="Spectrum", 
+p_band_profile = figure(width=plot_width*2, height=300, title="Spectrum", 
                         x_axis_label="Wavelength (μm)", y_axis_label="Reflectance", )
 p_band_profile.line(x='Wavelength', y='Reflectance', source=band_profile_source, line_color='blue', line_width=2)#, legend_label="Band Profile")
 
@@ -432,8 +438,8 @@ def latlon_to_pixel(lon, lat, lbl_data):
     lat_range = lbl_data['max_lat'] - lbl_data['min_lat']
     
     # Convert the lon/lat into pixel coordinates based on image dimensions
-    x_pixel = int((lon - lbl_data['west_lon']) / lon_range * (width - 1))
-    y_pixel = int((lat - lbl_data['min_lat']) / lat_range * (height - 1))
+    x_pixel = int((lon - lbl_data['west_lon']) / lon_range * (plot_width - 1))
+    y_pixel = int((lat - lbl_data['min_lat']) / lat_range * (plot_height - 1))
     
     return x_pixel, y_pixel
 
@@ -447,7 +453,7 @@ def update_band_profile(event):
     # Convert lat/lon to pixel coordinates
     x_pixel, y_pixel = latlon_to_pixel(lon, lat, lbl_data)
     
-    if 0 <= x_pixel < width and 0 <= y_pixel < height:
+    if 0 <= x_pixel < plot_width and 0 <= y_pixel < plot_height:
         band_profile = nan_img_sr_ma[y_pixel, x_pixel, :]
         #band_profile_source.data = dict(Wavelength=np.arange(len(band_profile)), Reflectance=band_profile)
         band_profile_source.data = dict(Wavelength=wavelength, Reflectance=band_profile)
@@ -458,6 +464,7 @@ p_vis.on_event('mousemove', update_band_profile)
 
 # Callback to update the image when RGB channels are changed
 def update_rgb_image(attr, old, new):    
+    
     # Get selected RGB channels
     channels_names = [dropdown_r.value, dropdown_g.value, dropdown_b.value]
     
@@ -476,8 +483,7 @@ def update_rgb_image(attr, old, new):
         'y': [lbl_data['min_lat']],
         'dw': [lbl_data['east_lon'] - lbl_data['west_lon']],
         'dh': [lbl_data['max_lat'] - lbl_data['min_lat']]
-    }
-    
+    }    
     # Update the image in the plot
    # p.image_rgba(image=[image_rgba], x=lbl_data['west_lon'], y=lbl_data['min_lat'],
 #dw=lbl_data['east_lon'] - lbl_data['west_lon'], dh=lbl_data['max_lat'] - lbl_data['min_lat'])
@@ -503,7 +509,9 @@ def update_rgb_image2(attr, old, new):
         'dw': [lbl_data['east_lon'] - lbl_data['west_lon']],
         'dh': [lbl_data['max_lat'] - lbl_data['min_lat']]
     }
-
+    #plot_width, plot_height = nan_img_sr_ma2.shape[:2]
+    #p_vis.width = plot_width
+    #p_vis.height = plot_height
 # Initialize the RGB dropdowns
 
 dropdown_r = Select(title="Red Channel", value="BD1900_2", options=sr_names)
@@ -549,8 +557,8 @@ from bokeh.models import FixedTicker
 from bokeh.models import Span, FixedTicker
 
 def update_files(attr, old, new):
-    global img, img_sr, reference_RGB, nan_img_sr_ma, lbl_data, wavelength
-    img, img_sr, wavelength, sr_names, lbl_data, hdr_folder_path = load_files(new)
+    global img, img_sr, reference_RGB, nan_img_sr_ma, lbl_data, wavelength, plot_height,plot_width,p,p_vis
+    img, img_sr, wavelength, sr_names, lbl_data, hdr_folder_path= load_files(new)
     
     if img is None or img_sr is None or lbl_data is None:
         return
@@ -585,7 +593,14 @@ def update_files(attr, old, new):
     p.x_range.end = lbl_data['east_lon']
     p.y_range.start = lbl_data['min_lat']
     p.y_range.end = lbl_data['max_lat']
-    
+    plot_height, plot_width, _ = img.shape
+    print(img.shape)
+    print('SIIIIZE: ', plot_height, plot_width)
+    #p, p_vis, plot_height, plot_width = plotter(lbl_data,img)#img_height, img_width)
+    #p.width = plot_width
+    #p.height = plot_height
+    #p_vis.width = plot_width
+    #p_vis.height = plot_height
     # Define the new ticks based on the lon/lat in lbl_data
     longitude_ticks = list(np.arange(round(lbl_data['west_lon'], 1), round(lbl_data['east_lon'], 1), 0.05))
     latitude_ticks = list(np.arange(round(lbl_data['min_lat'], 1), round(lbl_data['max_lat'], 1), 0.05))
@@ -615,8 +630,8 @@ def update_files(attr, old, new):
 
 
 def update_files2(attr, old, new):
-    
-    img, img_sr, wavelength, sr_names, lbl_data, hdr_folder_path = load_files(new)
+    #global img, img_sr, wavelength, sr_names, lbl_data, hdr_folder_path
+    img, img_sr, wavelength, sr_names, lbl_data, hdr_folder_path= load_files(new)
     
     if img is None or img_sr is None or lbl_data is None:
         return
@@ -651,6 +666,22 @@ def update_files2(attr, old, new):
         'dh': [lbl_data['max_lat'] - lbl_data['min_lat']]
     }
     
+    # Update the ranges directly in p and p_vis
+    p_vis.x_range.start = lbl_data['west_lon']
+    p_vis.x_range.end = lbl_data['east_lon']
+    p_vis.y_range.start = lbl_data['min_lat']
+    p_vis.y_range.end = lbl_data['max_lat']
+    #plot_width, plot_height = nan_img_sr_ma2.shape[:2]
+    #p_vis.width = plot_width
+    #p_vis.height = plot_height
+    # Define the new ticks based on the lon/lat in lbl_data
+    longitude_ticks = list(np.arange(round(lbl_data['west_lon'], 1), round(lbl_data['east_lon'], 1), 0.05))
+    latitude_ticks = list(np.arange(round(lbl_data['min_lat'], 1), round(lbl_data['max_lat'], 1), 0.05))
+
+    # Update the tickers
+    p_vis.xaxis.ticker = FixedTicker(ticks=longitude_ticks)
+    p_vis.yaxis.ticker = FixedTicker(ticks=latitude_ticks)
+
 
 def update_pt_table(attr, old, new):
     
@@ -813,7 +844,7 @@ p2.data_source.on_change('data', update_pt_table2)
 
 
 # Initialize the band profile plot
-band_profile_plot = figure(width=plot_width//4, height=plot_height//3, title="ROI points Spectra",
+band_profile_plot = figure(width=plot_width, height=300, title="ROI points Spectra",
                            x_axis_label="Wavelength (μm)", y_axis_label="Reflectance")
 
 # Data source for band profiles
@@ -844,7 +875,7 @@ def update_band_profiles():
     # Extract band profiles from nan_img_sr_ma based on lat/lon
     for lon, lat in zip(xs, ys):
         x_pixel, y_pixel = latlon_to_pixel(lon, lat, lbl_data)
-        if 0 <= x_pixel < width and 0 <= y_pixel < height:
+        if 0 <= x_pixel < plot_width and 0 <= y_pixel < plot_height:
             band_profile = nan_img_sr_ma[y_pixel, x_pixel, :]
             if band_profile.mean() > 0:
                 band_profiles.append(list(band_profile))
@@ -878,7 +909,7 @@ def update_band_profiles():
 source_table.on_change('data', lambda attr, old, new: update_band_profiles())
 
 # Initialize the band profile plot NEUTRAL
-band_profile_plot2 = figure(width=plot_width//4, height=plot_height//3, title="Neutral Spectra",
+band_profile_plot2 = figure(width=plot_width, height=300, title="Neutral Spectra",
                            x_axis_label="Wavelength (μm)", y_axis_label="Reflectance",x_range=band_profile_plot.x_range,y_range=band_profile_plot.y_range)
 
 # Data source for band profiles
@@ -908,7 +939,7 @@ def update_band_profiles2():
     # Extract band profiles from nan_img_sr_ma based on lat/lon
     for lon, lat in zip(xs, ys):
         x_pixel, y_pixel = latlon_to_pixel(lon, lat, lbl_data)
-        if 0 <= x_pixel < width and 0 <= y_pixel < height:
+        if 0 <= x_pixel < plot_width and 0 <= y_pixel < plot_height:
             band_profile2 = nan_img_sr_ma[y_pixel, x_pixel, :]
             if band_profile2.mean() > 0:
                 band_profiles2.append(list(band_profile2))
@@ -946,7 +977,7 @@ source_table2.on_change('data', lambda attr, old, new: update_band_profiles2())
 
 
 # Initialize the ratio plot
-ratio_plot = figure(width=plot_width//2, height=plot_height//2, title="Ratio of Mean Band Profiles",
+ratio_plot = figure(width=plot_width*2, height=300, title="Ratio of Mean Band Profiles",
                     x_axis_label="Wavelength (μm)", y_axis_label="Ratio")
 
 # Data source for the ratio plot
@@ -957,7 +988,7 @@ ratio_plot.line(x='band', y='ratio', source=source_ratio_band_profile, line_colo
 
 
 # Initialize the second plot for normalized data
-normalized_plot = figure(width=plot_width//2, height=plot_height//2, title="Normalized Ratio of Mean Band Profiles",
+normalized_plot = figure(width=plot_width, height=300, title="Normalized Ratio of Mean Band Profiles",
                          x_axis_label="Wavelength (μm)", y_axis_label="Normalized Ratio")
 
 # Data source for the normalized ratio plot
@@ -1208,21 +1239,37 @@ def export_all_to_svg():
 # Connect the single export function to the button
 export_button_svg.on_click(export_all_to_svg)
 
-layout = row(
-    # First Column
-    column(
-        row(subfolder_dropdown, dropdown_if, export_button_svg),     
-        row(band_select, dropdown_r, dropdown_g, dropdown_b, multi_select),  # RGB channel dropdowns
-        row(band_select2, dropdown_r2, dropdown_g2, dropdown_b2),  # RGB channel dropdowns2
-        row(p, p_vis)
-    ),
-    # Second Column
-    column(
-        p_band_profile,
+layout = column(
+    # Top row with dropdowns and p_band_profile
+    row(subfolder_dropdown, dropdown_if, export_button_svg,multi_select),
+    
+    
+    
+    # Two columns below
+    row(
+        # Left column
+        column(
+            row(band_select, dropdown_r, dropdown_g, dropdown_b, ),
+            p
+        ),
+        # Right column
+        column(
+            row(band_select2, dropdown_r2, dropdown_g2, dropdown_b2),
+            p_vis
+        ),
+        column(
+            row(p_band_profile),
         row(band_profile_plot, band_profile_plot2),
-        row(ratio_plot,normalized_plot)
-    )
+        row(ratio_plot),
+        
+    ),
+    ),
+    
+    # Single column spanning both above columns
+    
 )
+
+
 
 # Add the layout to the document
 curdoc().clear()
